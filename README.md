@@ -4,7 +4,7 @@ I use this for my friends so some of the language in the messages may not be app
 
 To use:
 1) Follow the steps to "authenticate" the bot with Discord, here is the link I used https://realpython.com/how-to-make-a-discord-bot-python/
-2) Create a file called ".env", include the following but adjust as needed for your implementation
+2) Create a file called ".env", include the following but adjust as needed for your implementation  
   #.env  
   DISCORD_TOKEN=                    #PUT YOUR TOKEN HERE, follow above link for details  
   DISCORD_GUILD=                    #Put the name of your server/guild you want the bot in  
