@@ -1,0 +1,4 @@
+*.json
+*.pkl
+*.env
+*.txt
