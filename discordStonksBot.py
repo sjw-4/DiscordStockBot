@@ -3,9 +3,13 @@
 #Current version: 0.2
 
 from yahoo_fin import stock_info as si
+from yahoo_fin import options as op
 import os
 import pickle as pk
 import json
+from enum import Enum
+import numpy as np
+import datetime
 
 import discord
 from dotenv import load_dotenv
@@ -19,16 +23,24 @@ ADMIN = os.getenv('DISCORD_ADMIN')
 SUGGEST = os.getenv('DISCORD_SUGGESTIONS')
 
 #GLOBAL VARIABLES------------------------------------------------------
-userNames = []
-allUsers = []
-startMoney = 10000
-adminCmds = True
+userNames = []          #stored list of usernames, used to initialize on reboot
+allUsers = []           #list of all User objects
+startMoney = 10000      #amount of money each user starts with
+adminCmds = True        #whether or not to allow admin commands
+optBuys = 100           #how many options are bought at a time (default 100)
+curDate = ""            #the current date
+dateFormat = '%Y-%m-%d' #format used for the date
 
 #Pre written outputs---------------------------------------------------
 badError = "You shouldn't see this error, if you do shit is fucked. Let SJ know"
-commands = ["--help", "--addme <name>", "--info <ticker>", "--buy <ticker> <amount>", "--sell <ticker> <amount>", "--summary <name>", "--history <name>", "--leaderboard", "--suggest <your suggestion to admin>"]
+commands = ["--help", "--addme <name>", "--info <ticker>", "--buy <ticker> <amount>", "--sell <ticker> <amount>", "--calls <ticker> <strike> <YYYY-MM-DD> <# to buy>", "--puts <ticker> <strike> <YYYY-MM-DD> <# to buy>", "--summary <name>", "--history <name>", "--leaderboard", "--suggest <your suggestion to admin>"]
 listOfCommands = "List of commands: " + "\n".join(commands)
 badInputResponse = "Incorrect input for command, type --help for full command list"
+
+#Stuff for options trading
+    #name = 0
+    #strike = 2
+    #cost = 3
 
 #info in users---------------------------------------------------------
     #name:      actual name (i.e. Sean)
@@ -45,7 +57,6 @@ badInputResponse = "Incorrect input for command, type --help for full command li
     - add ability to trade options
     - add log file
 '''
-
 #Returns the stock price for given ticker
 def getStockPrice(ticker):
     try:
@@ -76,6 +87,37 @@ def saveUserData(user):
     except:
         print("ERROR:saveUserData: unable to save data for " + str(user.name))
 
+#Returns option table with the given parameters
+def getOptTable(_type, _ticker, _date):
+    try:
+        return op.get_options_chain(_ticker, _date)[_type].to_numpy()
+    except:
+        return "Unable to load options chain for the requested data, please check your inputs"
+
+#Returns the cost for an option in a table with the given strike price
+def getOptCost(_optTable, _strikePrice):
+    for row in _optTable:
+        if row[2] == _strikePrice:
+            return int(row[3])
+    return "Unable to load cost of requested option, please check your inputs"
+
+#Returns if a given string is in valid date format
+def validDate(_date):
+    try:
+        if _date == datetime.datetime.strptime(_date, dateFormat).strftime(dateFormat): return True
+    except:
+        return False
+
+#Returns value of option
+def getOptVal(_type, _ticker, _strike):
+    rawVal = getStockPrice(_ticker) - _strike
+    if _type == 'puts':
+        rawVal *= -1
+    if rawVal > 0:
+        return rawVal * optBuys
+    else:
+        return 0
+
 class User:
     #Initializes user, loads existing data if it exists
     def __init__(self, _name, _uName = None):
@@ -104,7 +146,11 @@ class User:
     def updateInfo(self):
         self.curVal = self.curMoney
         for stock in self.curStocks:
-            self.curVal += getStockPrice(stock) * self.curStocks[stock]
+            if ':' not in stock:
+                self.curVal += getStockPrice(stock) * self.curStocks[stock]
+            else:
+                optInfo = stock.split(':')
+                self.curVal += getOptVal(optInfo[0], optInfo[1], float(optInfo[2])) * self.curStocks[stock]
         if self.curVal <= 0:
             print("WARNING:updateInfo: " + str(self.name) + " has negative value -> " + str(self.curVal))
     
@@ -148,7 +194,11 @@ class User:
         output += "Current net worth:\t$" + str(round(self.curVal, 2)) + "\n"
         output += "Current holdings:\n"
         for stock in self.curStocks:
-            output += "\t" + str(stock) + ":" + " " * (5 - len(str(stock))) + str(self.curStocks[stock]) + " at $" + str(round(getStockPrice(stock), 2)) + " ea.\n"
+            if ':' not in stock:
+                output += "\t" + str(stock) + ":" + " " * (5 - len(str(stock))) + str(self.curStocks[stock]) + " at $" + str(round(getStockPrice(stock), 2)) + " ea.\n"
+            else:
+                optInfo = stock.split(':')
+                output += "\t" + optInfo[0] + " " + optInfo[1] + ", x" + str(self.curStocks[stock]) + " at $" + optInfo[2] + ", exp:" + optInfo[3] + "\n"
         return output
 
     #Updates the users rank
@@ -161,9 +211,48 @@ class User:
         output = ""
         output += "Trade history for " + self.name + " (" + self.uName + "):\n"
         for i in reversed(range(len(self.tradeHist))):
-            output += "\t" + self.tradeHist[i]['type'] + " - " + self.tradeHist[i]['ticker'] + " - " + str(self.tradeHist[i]['amount']) + " - $" + str(round(self.tradeHist[i]['price'], 2)) + "\n"
+            output += "\t" + self.tradeHist[i]['type'] + " - " + self.tradeHist[i]['ticker'] + " - " + str(self.tradeHist[i]['amount']) + " - $" + str(round(self.tradeHist[i]['price'], 2))
+            if 'strike' in self.tradeHist[i]:
+                output += " - strk:" + str(self.tradeHist[i]['strike']) + " - exp:" + str(self.tradeHist[i]['date'])
+            output += "\n"
         return output
 
+    #Attempts to buy options
+    def buyOptions(self, _type, _ticker, _date, _strike, _numBuys):
+        optTable = getOptTable(_type, _ticker, _date)
+        if type(optTable) == str:
+            return optTable
+        optCost = getOptCost(optTable, _strike)
+        if type(optCost) != int:
+            return optCost
+        if self.curMoney < optBuys * optCost * _numBuys:
+            return str(self.name) + " is a broke ass bitch and can't afford " + str(_numBuys) + " " + str(_type)[:-1] + " options of " + str(_ticker) + " expiring " + _date
+        self.curMoney -= optBuys * optCost * _numBuys
+        if str(_type + ':' + _ticker + ':' + str(_strike) + ':' + _date) in self.curStocks:
+            self.curStocks[str(_type + ':' + _ticker + ':' + str(_strike) + ':' + _date)] += _numBuys
+        else:
+            self.curStocks[str(_type + ':' + _ticker + ':' + str(_strike) + ':' + _date)] = _numBuys
+        self.tradeHist.append({'type': _type, 'ticker': _ticker, 'amount': _numBuys, 'price': optCost, 'strike': _strike, 'date': _date})
+        saveUserData(self)
+        return str(self.name) + " successfully purchased " + str(_numBuys) + " " + str(_type)  + " of " + _ticker
+
+    #Checks if options have expires and calculate the return appropriately
+    def expOpts(self):
+        tempDict = {}
+        for opt in self.curStocks:
+            if ':' in opt:
+                optInfo = opt.split(':')
+                if datetime.datetime.strptime(optInfo[3], dateFormat) < datetime.datetime.strptime(curDate, dateFormat):
+                    self.curMoney += getOptVal(optInfo[0], optInfo[1], int(optInfo[2])) * self.curStocks[opt]
+                else:
+                    tempDict[opt] = self.curStocks[opt]
+            else:
+                tempDict[opt] = self.curStocks[opt]
+        self.curStocks = tempDict
+        saveUserData(self)
+
+
+#Prints info about a stock
 def getStockInfo(_ticker):
     if not verifyStockTicker():
         return "Stock ticker not recognized"
@@ -211,6 +300,7 @@ def getLeaderboard():
 
 #Does initial data loading and preparing on boot
 def startService():
+    curDate = datetime.datetime.today().strftime(dateFormat)
     try:
         inFile = open(INITFILE, 'r')
         userNames = json.load(inFile)
@@ -266,6 +356,11 @@ def logSuggestion(auth, sug):
         return "Error logging suggestion to file, try again or contact admin"
     return "Successfully logged suggestion by " + auth + " to file"
 
+#Calculate expired options
+def expireOpt():
+    for user in allUsers:
+        user.expOpts()
+
 
 #HANDLE INPUT FROM DISCORD------------------------------------------------
     #Input options:
@@ -274,12 +369,21 @@ def logSuggestion(auth, sug):
     --info <ticker>
     --buy <ticker> <amount>
     --sell <ticker> <amount>
+    --calls <ticker> <strike> <YYYY-MM-DD> <# to buy>
+    --puts <ticker> <strike> <YYYY-MM-DD> <# to buy>
+    --calls
     --summary <name>
     --history <name>
     --leaderboard
     '''
 
 def handleDiscord(_author, _command):
+    #check if it's a new day
+    global curDate
+    if curDate != datetime.datetime.today().strftime('%Y-%m-%d'):
+        curDate = datetime.datetime.today().strftime('%Y-%m-%d')
+        expireOpt()
+
     try:
         author = str(_author)
         cmds = str(_command).split()
@@ -319,6 +423,20 @@ def handleDiscord(_author, _command):
         userI = getUserIndex(author)
         if type(userI) is not int: return userI
         try: return allUsers[userI].sellStock(cmds[1], int(cmds[2]))
+        except: return badInputResponse
+    elif cmds[0] == "--calls":
+        if len(cmds) < 5: return badInputResponse
+        userI = getUserIndex(author)
+        if type(userI) is not int: return userI
+        if not validDate(cmds[3]): return badInputResponse
+        return allUsers[userI].buyOptions('calls', cmds[1], cmds[3], float(cmds[2]), int(cmds[4]))
+        #except: return badInputResponse
+    elif cmds[0] == "--puts":
+        if len(cmds) < 5: return badInputResponse
+        userI = getUserIndex(author)
+        if type(userI) is not int: return userI
+        if not validDate(cmds[3]): return badInputResponse
+        try: return allUsers[userI].buyOptions('puts', cmds[1], cmds[3], float(cmds[2]), int(cmds[4]))
         except: return badInputResponse
     elif cmds[0] == "--summary":
         if len(cmds) == 1: userI = getUserIndex(author)
