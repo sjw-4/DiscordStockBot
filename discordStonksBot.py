@@ -38,8 +38,8 @@ dateFormat = '%Y-%m-%d' #format used for the date
 
 #Pre written outputs---------------------------------------------------
 badError = "You shouldn't see this error, if you do shit is fucked. Let SJ know"
-commands = ["--help", "--addme <name>", "--info <ticker>", "--buy <ticker> <amount>", "--sell <ticker> <amount>", "--calls <ticker> <strike> <YYYY-MM-DD> <# to buy>", "--puts <ticker> <strike> <YYYY-MM-DD> <# to buy>", "--summary <name>", "--history <name>", "--leaderboard", "--suggest <your suggestion to admin>"]
-listOfCommands = "List of commands: " + "\n".join(commands)
+commands = ["--help", "--addme <name>", "--info <ticker>", "--buy <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>", "--sell <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>", "--summary <name>", "--history <name>", "--leaderboard", "--suggest <your suggestion to admin>"]
+listOfCommands = "List of commands: \n" + "\n".join(commands)
 badInputResponse = "Incorrect input for command, type --help for full command list"
 
 #Stuff for options trading
@@ -53,7 +53,7 @@ badInputResponse = "Incorrect input for command, type --help for full command li
     #rank:      current rank in group
     #curMoney:  how much money they have in their profile
     #curVal:    how much their entire portfolio is worth right now
-    #curStocks: stocks currently in their portfolio (ticker->amount)
+    #curStocks: stocks currently in their portfolio (ticker->amount) or ('type:ticker:strike:date'->amount)
     #tradeHist: trade history (ticker->(trade type, amount))
 
 #TODO
@@ -115,7 +115,7 @@ def validDate(_date):
 
 #Returns value of option
 def getOptVal(_type, _ticker, _strike):
-    rawVal = getStockPrice(_ticker) - _strike
+    rawVal = float(getStockPrice(_ticker)) - _strike
     if _type == 'puts':
         rawVal *= -1
     if rawVal > 0:
@@ -237,9 +237,29 @@ class User:
             self.curStocks[str(_type + ':' + _ticker + ':' + str(_strike) + ':' + _date)] += _numBuys
         else:
             self.curStocks[str(_type + ':' + _ticker + ':' + str(_strike) + ':' + _date)] = _numBuys
-        self.tradeHist.append({'type': _type, 'ticker': _ticker, 'amount': _numBuys, 'price': optCost, 'strike': _strike, 'date': _date})
+        self.tradeHist.append({'type': 'buy:' + _type, 'ticker': _ticker, 'amount': _numBuys, 'price': optCost, 'strike': _strike, 'date': _date})
         saveUserData(self)
         return str(self.name) + " successfully purchased " + str(_numBuys) + " " + str(_type)  + " of " + _ticker
+    
+    #Attempts to sell options
+    def sellOptions(self, _type, _ticker, _date, _strike, _numSells):
+        #('type:ticker:strike:date'->amount)
+        hashKey = _type + ':' + _ticker + ':' + str(_strike) + ':' + _date
+        if hashKey not in self.curStocks or self.curStocks[hashKey] < _numSells:
+            return str(self.name) + " is a dumbass who doesn't own enough " + _type + " of " + _ticker + " expiring on " + _date + " at strike price $" + str(_strike) + " to sell"
+        optTable = getOptTable(_type, _ticker, _date)
+        if type(optTable) == str:
+            return optTable
+        optCost = getOptCost(optTable, _strike)
+        if type(optCost) == str:
+            return optCost
+        self.curMoney += optCost * optBuys * _numSells
+        self.curStocks[hashKey] -= _numSells
+        if self.curStocks[hashKey] == 0:
+            del self.curStocks[hashKey]
+        self.tradeHist.append({'type': 'sell' + _type, 'ticker': _ticker, 'amount': _numSells, 'price': optCost, 'strike': _strike, 'date': _date})
+        saveUserData(self)
+        return str(self.name) + " successfully sold " + str(_numSells) + " " + str(_type)  + " of " + _ticker
 
     #Checks if options have expires and calculate the return appropriately
     def expOpts(self):
@@ -248,14 +268,15 @@ class User:
             if ':' in opt:
                 optInfo = opt.split(':')
                 if datetime.datetime.strptime(optInfo[3], dateFormat) < datetime.datetime.strptime(curDate, dateFormat):
-                    self.curMoney += getOptVal(optInfo[0], optInfo[1], int(optInfo[2])) * self.curStocks[opt]
+                    price = getOptVal(optInfo[0], optInfo[1], float(optInfo[2])) * self.curStocks[opt]
+                    self.curMoney += price
+                    self.tradeHist.append({'type':'exp:' + optInfo[0], 'ticker': optInfo[1], 'amount': self.curStocks[opt], 'price': price, 'strike': optInfo[2], 'date': optInfo[3]})
                 else:
                     tempDict[opt] = self.curStocks[opt]
             else:
                 tempDict[opt] = self.curStocks[opt]
         self.curStocks = tempDict
         saveUserData(self)
-
 
 #Prints info about a stock
 def getStockInfo(_ticker):
@@ -301,6 +322,7 @@ def getLeaderboard():
 
 #Does initial data loading and preparing on boot
 def startService():
+    global curDate
     curDate = datetime.datetime.today().strftime(dateFormat)
     try:
         allFiles = os.listdir()
@@ -315,6 +337,11 @@ def startService():
         cFile.write("Suggestions sent to admin:\n")
         cFile.close()
         print("Created suggestion file")
+    try:
+        print("Trying to expire contracts")
+        expireOpt()
+    except:
+        print("Error expiring options")
 
 #Get index of user from uName
 def getUserIndex(_uName):
@@ -354,7 +381,6 @@ def logSuggestion(auth, sug):
 
 #Calculate expired options
 def expireOpt():
-    print("expireOpt has been called")
     #check if it's a new day
     curDate = datetime.datetime.today().strftime('%Y-%m-%d')
     for user in allUsers:
@@ -366,10 +392,8 @@ def expireOpt():
     '''
     --addme <name>
     --info <ticker>
-    --buy <ticker> <amount>
-    --sell <ticker> <amount>
-    --calls <ticker> <strike> <YYYY-MM-DD> <# to buy>
-    --puts <ticker> <strike> <YYYY-MM-DD> <# to buy>
+    --buy <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>
+    --sell <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>
     --calls
     --summary <name>
     --history <name>
@@ -404,32 +428,28 @@ def handleDiscord(_author, _command):
     elif cmds[0] == "--info":
         if len(cmds) < 2: return badInputResponse
         return getStockInfo(cmds[1])
-    elif cmds[0] == "--buy":
-        if len(cmds) < 3: return badInputResponse
+    elif cmds[0] == '--buy':
+        if len(cmds) < 4: return badInputResponse
         userI = getUserIndex(author)
         if type(userI) is not int: return userI
-        try: return allUsers[userI].buyStock(cmds[1], int(cmds[2]))
-        except: return badInputResponse
-    elif cmds[0] == "--sell":
-        if len(cmds) < 3: return badInputResponse
+        if cmds[1] == 'stock' and len(cmds) == 4:
+            try: return allUsers[userI].buyStock(cmds[1], int(cmds[2]))
+            except: return badInputResponse 
+        elif (cmds[1] == 'puts' or cmds[1] == 'calls') and len(cmds) == 6:
+            try: return allUsers[userI].buyOptions(cmds[1], cmds[2], cmds[5], float(cmds[4]), int(cmds[3]))
+            except: return badError
+        else: return badError
+    elif cmds[0] == '--sell':
+        if len(cmds) < 4: return badInputResponse
         userI = getUserIndex(author)
         if type(userI) is not int: return userI
-        try: return allUsers[userI].sellStock(cmds[1], int(cmds[2]))
-        except: return badInputResponse
-    elif cmds[0] == "--calls":
-        if len(cmds) < 5: return badInputResponse
-        userI = getUserIndex(author)
-        if type(userI) is not int: return userI
-        if not validDate(cmds[3]): return badInputResponse
-        return allUsers[userI].buyOptions('calls', cmds[1], cmds[3], float(cmds[2]), int(cmds[4]))
-        #except: return badInputResponse
-    elif cmds[0] == "--puts":
-        if len(cmds) < 5: return badInputResponse
-        userI = getUserIndex(author)
-        if type(userI) is not int: return userI
-        if not validDate(cmds[3]): return badInputResponse
-        try: return allUsers[userI].buyOptions('puts', cmds[1], cmds[3], float(cmds[2]), int(cmds[4]))
-        except: return badInputResponse
+        if cmds[1] == 'stock' and len(cmds) == 4:
+            try: return allUsers[userI].sellStock(cmds[1], int(cmds[2]))
+            except: return badInputResponse 
+        elif (cmds[1] == 'puts' or cmds[1] == 'calls') and len(cmds) == 6:
+            try: return allUsers[userI].sellOptions(cmds[1], cmds[2], cmds[5], float(cmds[4]), int(cmds[3]))
+            except: return badError
+        else: return badError
     elif cmds[0] == "--summary":
         if len(cmds) == 1: userI = getUserIndex(author)
         else: userI = getUserIndex(cmds[1])
