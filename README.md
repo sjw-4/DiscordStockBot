@@ -8,20 +8,19 @@ To use:
   #.env  
   DISCORD_TOKEN=                    #PUT YOUR TOKEN HERE, follow above link for details  
   DISCORD_GUILD=                    #Put the name of your server/guild you want the bot in  
-  DISCORD_INIT_FILE=allUsers.json   #you can rename the file whatever you'd like  
   DISCORD_ADMIN=                    #your Discord username, allows you to enter admin commands  
   DISCORD_SUGGEESTIONS=suggest.txt  #you can rename the file whatever you'd like  
-3) Make sure the necessary packages are installed (non-exhaustive list below)
+3) Make sure the necessary packages are installed (using pip3)
   - yahoo_fin
-  - panda
+  - pandas
   - discord.py
-  - probably some others I can't remember, you'll get errors so ya
-4) run with "python3 disocrdStonksBot.py", I ran on Linux (Ubuntu) so I can't guarentee anything on Windows or Mac
+  - requests_html
+  - python-dotenv
+4) run with "python3 runBot.py", I ran on Linux (Ubuntu) so I can't guarentee anything on Windows or Mac
 
 The list of commands are in the file, I tried to keep things organized but you know how it goes. This is a few day project to make my "stock guru" friend a bit more humble, so have fairly low expectations going in
 
 Future plans:
   - Add log file for debugging after errors
   - Add timestamps
-  - Add option trading (in progress)
   - Add more admin commands (ie. set start money, etc)
