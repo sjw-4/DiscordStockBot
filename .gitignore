@@ -1,4 +1,4 @@
-*.json
 *.pkl
 *.env
 *.txt
+__pycache__

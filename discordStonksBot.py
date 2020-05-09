@@ -6,7 +6,6 @@ from yahoo_fin import stock_info as si
 from yahoo_fin import options as op
 import os
 import pickle as pk
-import json
 from enum import Enum
 import numpy as np
 import datetime
@@ -18,14 +17,12 @@ from dotenv import load_dotenv
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
-INITFILE = os.getenv('DISCORD_INIT_FILE')
 ADMIN = os.getenv('DISCORD_ADMIN')
 SUGGEST = os.getenv('DISCORD_SUGGESTIONS')
 
 #GLOBAL VARIABLES------------------------------------------------------
-userNames = []          #stored list of usernames, used to initialize on reboot
 allUsers = []           #list of all User objects
-startMoney = 10000      #amount of money each user starts with
+startMoney = 1000000    #amount of money each user starts with
 adminCmds = True        #whether or not to allow admin commands
 optBuys = 100           #how many options are bought at a time (default 100)
 curDate = ""            #the current date
@@ -121,9 +118,9 @@ def getOptVal(_type, _ticker, _strike):
 class User:
     #Initializes user, loads existing data if it exists
     def __init__(self, _name, _uName = None):
-        if os.path.exists(_name + '.pkl'):
+        if os.path.exists(_name):
             print("Loading file")
-            with open(_name + '.pkl', 'rb') as uf:
+            with open(_name, 'rb') as uf:
                 self.name = pk.load(uf)
                 self.uName = pk.load(uf)
                 self.rank = pk.load(uf)
@@ -254,9 +251,9 @@ class User:
 
 #Prints info about a stock
 def getStockInfo(_ticker):
-    if not verifyStockTicker():
+    if not verifyStockTicker(_ticker):
         return "Stock ticker not recognized"
-    return "Current price for " + _ticker + ": " + getStockPrice(_ticker)
+    return "Current price for " + _ticker + ": " + str(round(getStockPrice(_ticker), 2))
 
 #Creates new user
 def createUser(_name, _uName):
@@ -271,10 +268,6 @@ def createUser(_name, _uName):
 
     try:
         allUsers.append(User(name, uName))
-        userNames.append(name)
-        outFile = open(INITFILE, 'w')
-        json.dump(userNames, outFile)
-        outFile.close()
         return "New user added successfully"
     except:
         print("ERROR:createUser: oof")
@@ -302,16 +295,13 @@ def getLeaderboard():
 def startService():
     curDate = datetime.datetime.today().strftime(dateFormat)
     try:
-        inFile = open(INITFILE, 'r')
-        userNames = json.load(inFile)
-        inFile.close()
-        for name in userNames:
-            allUsers.append(User(name))
+        allFiles = os.listdir()
+        for f in allFiles:
+            if f.endswith('.pkl'):
+                allUsers.append(User(f))
         print("Users loaded successfully")
     except:
-        print("No INITFILE found, creating one")
-        inFile = open(INITFILE, 'w')
-        inFile.close()
+        print("Unable to load users")
     if not os.path.exists(SUGGEST):
         cFile = open(SUGGEST, 'w')
         cFile.write("Suggestions sent to admin:\n")
@@ -331,7 +321,7 @@ def resetFiles():
     try:
         allFiles = os.listdir()
         for f in allFiles:
-            if f.endswith('.json') or f.endswith('.pkl'):
+            if f.endswith('.pkl'):
                 os.remove(f)
     except:
         print("Failed to reset files, aborting")
@@ -339,9 +329,7 @@ def resetFiles():
     startService()
     for i in range(len(allUsers)):
         del allUsers[0]
-    for i in range(len(userNames)):
-        del userNames[0]
-    if len(userNames) != 0  or len(allUsers) != 0:
+    if len(allUsers) != 0:
         return "Error in reseting data"
     return "Bot reset successfully"
 
@@ -358,6 +346,9 @@ def logSuggestion(auth, sug):
 
 #Calculate expired options
 def expireOpt():
+    print("expireOpt has been called")
+    #check if it's a new day
+    curDate = datetime.datetime.today().strftime('%Y-%m-%d')
     for user in allUsers:
         user.expOpts()
 
@@ -378,12 +369,6 @@ def expireOpt():
     '''
 
 def handleDiscord(_author, _command):
-    #check if it's a new day
-    global curDate
-    if curDate != datetime.datetime.today().strftime('%Y-%m-%d'):
-        curDate = datetime.datetime.today().strftime('%Y-%m-%d')
-        expireOpt()
-
     try:
         author = str(_author)
         cmds = str(_command).split()
