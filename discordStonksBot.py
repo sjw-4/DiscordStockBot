@@ -38,9 +38,10 @@ dateFormat = '%Y-%m-%d' #format used for the date
 
 #Pre written outputs---------------------------------------------------
 badError = "You shouldn't see this error, if you do shit is fucked. Let SJ know"
-commands = ["--help", "--addme <name>", "--info <ticker>", "--buy <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>", "--sell <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>", "--summary <name>", "--history <name>", "--leaderboard", "--suggest <your suggestion to admin>"]
+commands = ["--help", "--addme <name>", "--info <ticker>", "--buy <stock/calls/puts> <ticker> <amount> <*strike*> <*YYYY-MM-DD*>", "--sell <stock/calls/puts> <ticker> <amount> <*strike*> <*YYYY-MM-DD*>", "--summary <name>", "--history <name>", "--leaderboard", "--suggest <your suggestion to admin>"]
 listOfCommands = "List of commands: \n" + "\n".join(commands)
 badInputResponse = "Incorrect input for command, type --help for full command list"
+marketCloseResp = "Pools closed. No trading now. You must live with your poor choices until the market reopens."
 
 #Stuff for options trading
     #name = 0
@@ -155,7 +156,16 @@ class User:
                 self.curVal += getStockPrice(stock) * self.curStocks[stock]
             else:
                 optInfo = stock.split(':')
-                self.curVal += getOptVal(optInfo[0], optInfo[1], float(optInfo[2])) * self.curStocks[stock]
+                try:
+                    optTable = getOptTable(optInfo[0], optInfo[1], optInfo[3])
+                    if type(optTable) == str:
+                        raise Exception("Unable to load optTable")
+                    optCost = getOptCost(optTable, optInfo[2])
+                    if type(optCost) == str:
+                        raise Exception("Unable to load optCost")
+                    self.curVal += optCost * optBuys * self.curStocks[stock]
+                except:
+                    self.curVal += getOptVal(optInfo[0], optInfo[1], float(optInfo[2])) * self.curStocks[stock]
         if self.curVal <= 0:
             print("WARNING:updateInfo: " + str(self.name) + " has negative value -> " + str(self.curVal))
     
@@ -387,6 +397,15 @@ def expireOpt():
     for user in allUsers:
         user.expOpts()
 
+#Returns true if market is open, false otherwise
+def canTrade():
+    curWeekday = datetime.datetime.today().weekday()
+    time = (int(datetime.datetime.now().strftime('%H')) * 100) + int(datetime.datetime.now().strftime('%M'))
+    if curWeekday < 5 and time >= 830 and time < 1500:
+        return True
+    else:
+        return False
+
 
 #HANDLE INPUT FROM DISCORD------------------------------------------------
     #Input options:
@@ -395,7 +414,6 @@ def expireOpt():
     --info <ticker>
     --buy <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>
     --sell <stock/calls/puts> <ticker> <amount> <strike*> <YYYY-MM-DD*>
-    --calls
     --summary <name>
     --history <name>
     --leaderboard
@@ -408,6 +426,10 @@ def handleDiscord(_author, _command):
     except:
         print("ERROR:handleDiscord: error converting input\n\t" + str(_author) + "\n\t" + str(_command))
         return badError
+    
+    #Check if attempting to trade after hours
+    if not canTrade() and (cmds[0] == '--buy' or cmds[0] == '--sell'):
+        return marketCloseResp
 
     #ADMIN COMMANDS - No input checking so make sure you do it right
     if adminCmds:
@@ -434,8 +456,8 @@ def handleDiscord(_author, _command):
         userI = getUserIndex(author)
         if type(userI) is not int: return userI
         if cmds[1] == 'stock' and len(cmds) == 4:
-            try: return allUsers[userI].buyStock(cmds[1], int(cmds[2]))
-            except: return badInputResponse 
+            try: return allUsers[userI].buyStock(cmds[2], int(cmds[3]))
+            except: return badInputResponse
         elif (cmds[1] == 'puts' or cmds[1] == 'calls') and len(cmds) == 6:
             try: return allUsers[userI].buyOptions(cmds[1], cmds[2], cmds[5], float(cmds[4]), int(cmds[3]))
             except: return badError
@@ -445,7 +467,7 @@ def handleDiscord(_author, _command):
         userI = getUserIndex(author)
         if type(userI) is not int: return userI
         if cmds[1] == 'stock' and len(cmds) == 4:
-            try: return allUsers[userI].sellStock(cmds[1], int(cmds[2]))
+            try: return allUsers[userI].sellStock(cmds[2], int(cmds[3]))
             except: return badInputResponse 
         elif (cmds[1] == 'puts' or cmds[1] == 'calls') and len(cmds) == 6:
             try: return allUsers[userI].sellOptions(cmds[1], cmds[2], cmds[5], float(cmds[4]), int(cmds[3]))
