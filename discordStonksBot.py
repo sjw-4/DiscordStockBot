@@ -271,6 +271,7 @@ class User:
                     price = getOptVal(optInfo[0], optInfo[1], float(optInfo[2])) * self.curStocks[opt]
                     self.curMoney += price
                     self.tradeHist.append({'type':'exp:' + optInfo[0], 'ticker': optInfo[1], 'amount': self.curStocks[opt], 'price': price, 'strike': optInfo[2], 'date': optInfo[3]})
+                    print(self.name + " had an option expire")
                 else:
                     tempDict[opt] = self.curStocks[opt]
             else:
