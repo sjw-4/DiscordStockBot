@@ -2,6 +2,9 @@
 #created by SJ Wilkins IV, 05/17/2020
 #Current version: 0.2
 
+import sys
+sys.dont_write_bytecode = True
+
 from yahoo_fin import stock_info as si
 from yahoo_fin import options as op
 import os
@@ -12,6 +15,11 @@ import datetime
 
 import discord
 from dotenv import load_dotenv
+
+try:
+    import main as tt
+except:
+    print("Unable to load Trump Twitter module")
 
 #INITIALIZATION STUFF--------------------------------------------------
 load_dotenv()
@@ -95,7 +103,7 @@ def getOptTable(_type, _ticker, _date):
 def getOptCost(_optTable, _strikePrice):
     for row in _optTable:
         if row[2] == _strikePrice:
-            return int(row[3])
+            return float(row[3])
     return "Unable to load cost of requested option, please check your inputs"
 
 #Returns if a given string is in valid date format
@@ -220,7 +228,7 @@ class User:
         if type(optTable) == str:
             return optTable
         optCost = getOptCost(optTable, _strike)
-        if type(optCost) != int:
+        if type(optCost) == str:
             return optCost
         if self.curMoney < optBuys * optCost * _numBuys:
             return str(self.name) + " is a broke ass bitch and can't afford " + str(_numBuys) + " " + str(_type)[:-1] + " options of " + str(_ticker) + " expiring " + _date
@@ -387,7 +395,6 @@ def handleDiscord(_author, _command):
             if cmds[0] == "--reset":        #--reset
                 return resetFiles()
 
-
     #GENERAL COMMANDS
     if cmds[0] == "--help":
         return listOfCommands
@@ -438,6 +445,8 @@ def handleDiscord(_author, _command):
     elif cmds[0] == "--suggest":
         if len(cmds) < 2: return badInputResponse
         return logSuggestion(author, cmds[1])
+    elif cmds[0] == "--searchTrumpTweets" and len(cmds) > 1:
+        return tt.searchTweet(" ".join(cmds[1:]))
     else:
         return listOfCommands
 

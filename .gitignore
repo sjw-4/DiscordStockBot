@@ -2,3 +2,7 @@
 *.env
 *.txt
 __pycache__
+*.json
+data.py
+main.py
+ranking.py
