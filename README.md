@@ -18,7 +18,7 @@ To use:
   - python-dotenv
 4) run with "python3 runBot.py", I ran on Linux (Ubuntu) so I can't guarentee anything on Windows or Mac
 
-The list of commands are in the file, I tried to keep things organized but you know how it goes. This is a few day project to make my "stock guru" friend a bit more humble, so have fairly low expectations going in
+The list of commands are in the file, I tried to keep things organized but you know how it goes. This is a few day project, so have fairly low expectations going in
 
 Future plans:
   - Add log file for debugging after errors
