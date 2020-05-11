@@ -30,7 +30,7 @@ SUGGEST = os.getenv('DISCORD_SUGGESTIONS')
 
 #GLOBAL VARIABLES------------------------------------------------------
 allUsers = []           #list of all User objects
-startMoney = 1000000    #amount of money each user starts with
+startMoney = 30000      #amount of money each user starts with
 adminCmds = True        #whether or not to allow admin commands
 optBuys = 100           #how many options are bought at a time (default 100)
 curDate = ""            #the current date
