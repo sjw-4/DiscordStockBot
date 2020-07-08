@@ -23,7 +23,7 @@ except:
 
 #INITIALIZATION STUFF--------------------------------------------------
 load_dotenv()
-TOKEN = os.getenv('DISCORD_TOKEN')
+TOKEN = os.getenv('DISCORD_TOKEN_TEST')
 GUILD = os.getenv('DISCORD_GUILD')
 ADMIN = os.getenv('DISCORD_ADMIN')
 SUGGEST = os.getenv('DISCORD_SUGGESTIONS')
@@ -37,11 +37,11 @@ curDate = ""            #the current date
 dateFormat = '%Y-%m-%d' #format used for the date
 
 #Pre written outputs---------------------------------------------------
-badError = "You shouldn't see this error, if you do shit is fucked. Let SJ know"
+badError = "You shouldn't see this error, if you do something went wrong. Let admin know"
 commands = ["--help", "--addme <name>", "--info <ticker>", "--buy <stock/calls/puts> <ticker> <amount> <*strike*> <*YYYY-MM-DD*>", "--sell <stock/calls/puts> <ticker> <amount> <*strike*> <*YYYY-MM-DD*>", "--summary <name>", "--history <name>", "--leaderboard", "--suggest <your suggestion to admin>"]
 listOfCommands = "List of commands: \n" + "\n".join(commands)
 badInputResponse = "Incorrect input for command, type --help for full command list"
-marketCloseResp = "Pools closed. No trading now. You must live with your poor choices until the market reopens."
+marketCloseResp = "No trading now. You must live with your poor choices until the market reopens."
 
 #Stuff for options trading
     #name = 0
@@ -83,6 +83,7 @@ def saveUserData(user):
     user.updateInfo()
     try:
         with open(user.name + '.pkl', 'wb') as uf:
+            print("Saving " + str(user.name))
             pk.dump(user.name, uf)
             pk.dump(user.uName, uf)
             pk.dump(user.rank, uf)
@@ -175,7 +176,7 @@ class User:
             return "Stock ticker not recognized"
         curPrice = getStockPrice(_ticker)
         if self.curMoney < curPrice * _amount:
-            return str(self.name) + " is a broke ass bitch and can't afford " + str(_amount) + " of " + str(_ticker)
+            return str(self.name) + " is broke and can't afford " + str(_amount) + " of " + str(_ticker)
         self.curMoney -= curPrice * _amount
         if _ticker in self.curStocks:
             self.curStocks[_ticker] += _amount
@@ -191,7 +192,7 @@ class User:
             return "Stock ticker not recognized"
         curPrice = getStockPrice(_ticker)
         if _ticker not in self.curStocks or self.curStocks[_ticker] < _amount:
-            return str(self.name) + " is a dumbass who doesn't own " + str(_amount) + " of " + _ticker + " to sell"
+            return str(self.name) + " doesn't own " + str(_amount) + " of " + _ticker + " to sell"
         self.curMoney += curPrice * _amount
         self.curStocks[_ticker] -= _amount
         if self.curStocks[_ticker] == 0:
@@ -241,7 +242,7 @@ class User:
         if type(optCost) == str:
             return optCost
         if self.curMoney < optBuys * optCost * _numBuys:
-            return str(self.name) + " is a broke ass bitch and can't afford " + str(_numBuys) + " " + str(_type)[:-1] + " options of " + str(_ticker) + " expiring " + _date
+            return str(self.name) + " is broke and can't afford " + str(_numBuys) + " " + str(_type)[:-1] + " options of " + str(_ticker) + " expiring " + _date
         self.curMoney -= optBuys * optCost * _numBuys
         if str(_type + ':' + _ticker + ':' + str(_strike) + ':' + _date) in self.curStocks:
             self.curStocks[str(_type + ':' + _ticker + ':' + str(_strike) + ':' + _date)] += _numBuys
@@ -256,7 +257,7 @@ class User:
         #('type:ticker:strike:date'->amount)
         hashKey = _type + ':' + _ticker + ':' + str(_strike) + ':' + _date
         if hashKey not in self.curStocks or self.curStocks[hashKey] < _numSells:
-            return str(self.name) + " is a dumbass who doesn't own enough " + _type + " of " + _ticker + " expiring on " + _date + " at strike price $" + str(_strike) + " to sell"
+            return str(self.name) + " doesn't own enough " + _type + " of " + _ticker + " expiring on " + _date + " at strike price $" + str(_strike) + " to sell"
         optTable = getOptTable(_type, _ticker, _date)
         if type(optTable) == str:
             return optTable
@@ -340,6 +341,7 @@ def startService():
         for f in allFiles:
             if f.endswith('.pkl'):
                 allUsers.append(User(f))
+                print("User loaded " + str(f))
         print("Users loaded successfully")
     except:
         print("Unable to load users")
@@ -368,6 +370,7 @@ def resetFiles():
         allFiles = os.listdir()
         for f in allFiles:
             if f.endswith('.pkl'):
+                print("Deleting " + str(f))
                 os.remove(f)
     except:
         print("Failed to reset files, aborting")
