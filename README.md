@@ -1,6 +1,5 @@
 # DiscordStockBot
-Bot in Python3 that can be connected to discord to allow a server to trade stocks with fake money and track the leader board. Currently a work in progress
-I use this for my friends so some of the language in the messages may not be appropriate for all audiences
+Bot in Python3 that can be connected to discord to allow a server to trade stocks and with fake money and track the leader board. Currently a work in progress
 
 To use:
 1) Follow the steps to "authenticate" the bot with Discord, here is the link I used https://realpython.com/how-to-make-a-discord-bot-python/
